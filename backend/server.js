@@ -1,0 +1,16 @@
+require('dotenv').config();
+const express=require('express');
+const cors=require('cors');
+const path=require('path');
+require('./db');
+const authRoutes=require('./routes/auth');
+const logRoutes=require('./routes/logs');
+const app=express();
+app.use(cors({origin:true}));
+app.use(express.json());
+app.use(express.static(path.join(__dirname,'public')));
+app.get('/api/health',(req,res)=>res.json({ok:true}));
+app.use('/auth',authRoutes);
+app.use('/logs',logRoutes);
+const port=process.env.PORT||4000;
+app.listen(port,()=>console.log(`Nutrition Tracker API running at http://localhost:${port}`));
