@@ -19,10 +19,14 @@ db.serialize(() => {
     calories REAL NOT NULL DEFAULT 0,
     carbs REAL NOT NULL DEFAULT 0,
     protein REAL NOT NULL DEFAULT 0,
+    fat REAL NOT NULL DEFAULT 0,
+    meal_type TEXT DEFAULT 'breakfast',
     created_at INTEGER NOT NULL,
     UNIQUE(user_id, created_at),
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
+  db.run('ALTER TABLE logs ADD COLUMN fat REAL NOT NULL DEFAULT 0', () => {});
+  db.run("ALTER TABLE logs ADD COLUMN meal_type TEXT DEFAULT 'breakfast'", () => {});
   db.run('CREATE INDEX IF NOT EXISTS idx_logs_user_created ON logs(user_id, created_at)');
 });
 module.exports = db;

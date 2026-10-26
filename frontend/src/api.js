@@ -6,8 +6,9 @@ const API={
  register:(body)=>request('/auth/register',{method:'POST',body:JSON.stringify(body)}),
  me:()=>request('/auth/me'),
  summary:(period='day')=>request(`/logs/summary?period=${period}`),
- logs:()=>request('/logs'),
+ logs:(from,to)=>request(`/logs${from||to?`?from=${from||''}&to=${to||''}`:''}`),
  createLog:(body)=>request('/logs',{method:'POST',body:JSON.stringify(body)}),
+ deleteLog:(id)=>request(`/logs/${id}`,{method:'DELETE'}),
  barcode:(code)=>request('/logs/barcode/'+encodeURIComponent(code)),
  goal:(daily_calorie_goal)=>request('/auth/goal',{method:'PUT',body:JSON.stringify({daily_calorie_goal})}),
  profile:(body)=>request('/auth/profile',{method:'PUT',body:JSON.stringify(body)})

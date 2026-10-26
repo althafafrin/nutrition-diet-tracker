@@ -1,34 +1,310 @@
-import React,{useEffect,useState} from 'react';
-import {Camera,LogOut,Plus,RefreshCw,Target,Utensils,ChartNoAxesCombined} from 'lucide-react';
-import {ResponsiveContainer,BarChart,Bar,XAxis,YAxis,Tooltip,CartesianGrid,Legend} from 'recharts';
+import React, { useEffect, useState, useCallback } from 'react';
 import API from './api';
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
+import DashboardView from './components/DashboardView';
+import FoodDiaryView from './components/FoodDiaryView';
+import BarcodeScannerView from './components/BarcodeScannerView';
+import FoodSearchView from './components/FoodSearchView';
+import GoalsAndAnalyticsView from './components/GoalsAndAnalyticsView';
+import SettingsView from './components/SettingsView';
+import AuthView from './components/AuthView';
+import { VERIFIED_FOODS } from './foodDatabase';
 
-function Auth({onAuth}) {
- const [mode,setMode]=useState('login'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState('');
- async function submit(e){e.preventDefault();setError('');try{const d=mode==='login'?await API.login({email,password}):await API.register({email,password});localStorage.setItem('token',d.token);localStorage.setItem('user',JSON.stringify(d.user));onAuth(d.user);}catch(e){setError(e.message);}}
- return <div className="auth-page"><div className="auth-card"><div className="brand-icon"><Utensils/></div><h1>Nutrition & Diet Tracker</h1><p className="muted">Make every meal count.</p><div className="switch"><button className={mode==='login'?'selected':''} onClick={()=>setMode('login')}>Log in</button><button className={mode==='register'?'selected':''} onClick={()=>setMode('register')}>Sign up</button></div><form onSubmit={submit}><label>Email</label><input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/><label>Password</label><input type="password" minLength="6" required value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/><button className="primary full">{mode==='login'?'Log in':'Create account'}</button>{error&&<p className="error">{error}</p>}</form></div></div>
-}
-export default function App(){
- const [user,setUser]=useState(null),[food,setFood]=useState(''),[barcode,setBarcode]=useState(''),[calories,setCalories]=useState(''),[carbs,setCarbs]=useState(''),[protein,setProtein]=useState(''),[message,setMessage]=useState(''),[summary,setSummary]=useState({calories:0,carbs:0,protein:0}),[weekly,setWeekly]=useState({calories:0,carbs:0,protein:0}),[logs,setLogs]=useState([]),[goal,setGoal]=useState(2000),[camera,setCamera]=useState(false);
- const videoRef=React.useRef(null),streamRef=React.useRef(null);
- useEffect(()=>{const t=localStorage.getItem('token');if(t)API.me().then(u=>{setUser(u);setGoal(u.daily_calorie_goal||2000);}).catch(()=>{localStorage.removeItem('token');localStorage.removeItem('user');});},[]);
- async function refresh(){try{const [d,w,l]=await Promise.all([API.summary('day'),API.summary('week'),API.logs()]);setSummary(d);setWeekly(w);setLogs(l);const u=JSON.parse(localStorage.getItem('user')||'{}');const g=Number(u.daily_calorie_goal||goal||2000);if(d.calories>g){setMessage(`⚠️ Daily calorie goal exceeded: ${d.calories} / ${g} kcal`);} }catch(e){setMessage(e.message);}}
- useEffect(()=>{if(user)refresh();},[user]);
- useEffect(()=>{return()=>stopCamera();},[]);
- function logout(){stopCamera();localStorage.removeItem('token');localStorage.removeItem('user');setUser(null);}
- async function save(e){e?.preventDefault();setMessage('');try{await API.createLog({food_name:food,barcode:barcode||null,calories:Number(calories),carbs:Number(carbs),protein:Number(protein)});setFood('');setBarcode('');setCalories('');setCarbs('');setProtein('');setMessage('Food log saved successfully.');await refresh();}catch(e){setMessage(e.message);}}
- async function lookup(code=barcode){if(!code)return setMessage('Enter a barcode first.');try{const d=await API.barcode(code);setFood(d.food_name||'');setBarcode(code);setCalories(String(d.calories??0));setCarbs(String(d.carbs??0));setProtein(String(d.protein??0));setMessage('Product found. Nutrition values are generally per 100 g.');}catch(e){setMessage(e.message);}}
- async function scan(){setMessage('');if(!navigator.mediaDevices?.getUserMedia)return setMessage('Camera is not supported. Enter the barcode manually.');try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});streamRef.current=s;videoRef.current.srcObject=s;await videoRef.current.play();setCamera(true);if(!('BarcodeDetector'in window)){setMessage('Live barcode detection is not supported by this browser. Use barcode lookup or image/manual input.');return;}const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128']});const loop=async()=>{if(!streamRef.current)return;try{const codes=await detector.detect(videoRef.current);if(codes.length){const code=codes[0].rawValue;stopCamera();setBarcode(code);await lookup(code);return;}}catch{}requestAnimationFrame(loop);};requestAnimationFrame(loop);}catch(e){setMessage('Camera permission denied or camera unavailable.');}}
- function stopCamera(){if(streamRef.current){streamRef.current.getTracks().forEach(t=>t.stop());streamRef.current=null;}setCamera(false);}
- async function saveGoal(){try{await API.goal(Number(goal));const u={...user,daily_calorie_goal:Number(goal)};setUser(u);localStorage.setItem('user',JSON.stringify(u));setMessage('Daily goal updated.');await refresh();}catch(e){setMessage(e.message);}}
- if(!user)return <Auth onAuth={u=>{setUser(u);setGoal(u.daily_calorie_goal||2000);}}/>;
- const chartData=[{name:'Today',calories:summary.calories||0,carbs:summary.carbs||0,protein:summary.protein||0},{name:'This week',calories:weekly.calories||0,carbs:weekly.carbs||0,protein:weekly.protein||0}];
- return <div className="app-shell"><header className="topbar"><div className="brand-icon small"><Utensils/></div><div><strong>Nutrition Tracker</strong><span>Healthy habits, made simple</span></div><button className="logout" onClick={logout}><LogOut size={17}/> Log out</button></header><main className="content"><section className="welcome"><div><p className="eyebrow">YOUR WELLNESS DASHBOARD</p><h1>Good food. Better you.</h1><p>Track your meals and understand your nutrition.</p></div><div className="welcome-art"><Utensils size={54}/></div></section>
- <section className="summary-grid"><div className="metric"><span>Today's calories</span><strong>{Math.round(summary.calories||0)} <small>kcal</small></strong><div className="progress"><i style={{width:Math.min(100,(summary.calories/(goal||2000))*100)+'%'}}/></div><small>Goal: {goal} kcal</small></div><div className="metric"><span>Carbohydrates</span><strong>{Math.round(summary.carbs||0)} <small>g</small></strong><small>Today</small></div><div className="metric"><span>Protein</span><strong>{Math.round(summary.protein||0)} <small>g</small></strong><small>Today</small></div></section>
- {message&&<div className={message.includes('exceeded')?'notice warning':'notice'}>{message}</div>}
- <div className="columns"><section className="panel"><h2><Plus size={20}/> Quick log</h2><form onSubmit={save} className="food-form"><label>Food name</label><input required value={food} onChange={e=>setFood(e.target.value)} placeholder="e.g. Apple"/><label>Barcode (optional)</label><div className="inline"><input value={barcode} onChange={e=>setBarcode(e.target.value)} placeholder="Enter barcode"/><button type="button" className="secondary" onClick={()=>lookup()}>Lookup</button></div><div className="inline"><button type="button" className="secondary" onClick={camera?stopCamera:scan}><Camera size={17}/>{camera?'Stop camera':'Scan barcode'}</button></div>{camera&&<video ref={videoRef} className="video" playsInline muted/>}<div className="nutrients"><div><label>Calories (kcal)</label><input required min="0" type="number" value={calories} onChange={e=>setCalories(e.target.value)}/></div><div><label>Carbs (g)</label><input required min="0" type="number" value={carbs} onChange={e=>setCarbs(e.target.value)}/></div><div><label>Protein (g)</label><input required min="0" type="number" value={protein} onChange={e=>setProtein(e.target.value)}/></div></div><button className="primary full">Save food log</button></form></section>
- <section className="panel"><h2><Target size={20}/> Goals & alerts</h2><p className="muted">Choose your daily calorie target.</p><label>Daily calorie goal (kcal)</label><div className="inline"><input type="number" min="1" max="20000" value={goal} onChange={e=>setGoal(e.target.value)}/><button className="primary" onClick={saveGoal}>Save goal</button></div></section></div>
- <section className="panel chart-panel"><h2><ChartNoAxesCombined size={20}/> Nutrition overview</h2><p className="muted">Daily and week-to-date totals</p><ResponsiveContainer width="100%" height={260}><BarChart data={chartData}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="name"/><YAxis/><Tooltip/><Legend/><Bar dataKey="calories" fill="#f87171" radius={[5,5,0,0]}/><Bar dataKey="carbs" fill="#60a5fa" radius={[5,5,0,0]}/><Bar dataKey="protein" fill="#34d399" radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></section>
- <section className="panel"><div className="panel-heading"><h2><Utensils size={20}/> Recent food logs</h2><button className="secondary" onClick={refresh}><RefreshCw size={16}/> Refresh</button></div>{logs.length===0?<p className="muted">No food logs yet. Add your first item above.</p>:<div className="log-list">{logs.slice(0,20).map(l=><div className="log-row" key={l.id}><div><strong>{l.food_name}</strong><small>{new Date(l.created_at).toLocaleString()}</small></div><div className="log-nutrition"><strong>{l.calories} kcal</strong><small>C {l.carbs}g · P {l.protein}g</small></div></div>)}</div>}</section>
- <footer>Signed in as {user.email} · Your nutrition logs are private to your account.</footer></main></div>;
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Nutrition state
+  const [goal, setGoal] = useState(2000);
+  const [summary, setSummary] = useState({ calories: 0, carbs: 0, protein: 0, fat: 0 });
+  const [weekly, setWeekly] = useState({ calories: 0, carbs: 0, protein: 0, fat: 0 });
+  const [logs, setLogs] = useState([]);
+  const [alertMessage, setAlertMessage] = useState('');
+  const [selectedMealSlot, setSelectedMealSlot] = useState('breakfast');
+  const [loading, setLoading] = useState(true);
+
+  // Check auth on load
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      API.me()
+        .then((u) => {
+          setUser(u);
+          setGoal(u.daily_calorie_goal || 2000);
+        })
+        .catch(() => {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch summary and logs
+  const refreshData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [daySum, weekSum, logList] = await Promise.all([
+        API.summary('day'),
+        API.summary('week'),
+        API.logs()
+      ]);
+
+      setSummary(daySum || { calories: 0, carbs: 0, protein: 0, fat: 0 });
+      setWeekly(weekSum || { calories: 0, carbs: 0, protein: 0, fat: 0 });
+      setLogs(Array.isArray(logList) ? logList : []);
+
+      const userGoal = Number(goal || 2000);
+      if (daySum?.calories > userGoal) {
+        setAlertMessage(`⚠️ Daily calorie target passed: ${Math.round(daySum.calories)} / ${userGoal} kcal`);
+      } else {
+        setAlertMessage('');
+      }
+    } catch (err) {
+      console.error('Failed to refresh data:', err);
+    }
+  }, [user, goal]);
+
+  useEffect(() => {
+    if (user) {
+      refreshData();
+    }
+  }, [user, refreshData]);
+
+  // Seed sample initial logs if the user has no logs yet
+  useEffect(() => {
+    if (user && logs.length === 0 && !loading) {
+      const seedDefaults = async () => {
+        try {
+          const sampleItems = [
+            {
+              food_name: "Bob's Red Mill Rolled Oats",
+              calories: 300,
+              protein: 10,
+              carbs: 54,
+              fat: 5,
+              meal_type: 'breakfast',
+              created_at: Date.now() - 6 * 3600 * 1000
+            },
+            {
+              food_name: 'Organic Cage-Free Eggs, Hard Boiled',
+              calories: 140,
+              protein: 12,
+              carbs: 1,
+              fat: 10,
+              meal_type: 'breakfast',
+              created_at: Date.now() - 5.5 * 3600 * 1000
+            },
+            {
+              food_name: 'Grilled Lemon Herb Chicken Breast',
+              calories: 290,
+              protein: 42,
+              carbs: 0,
+              fat: 6,
+              meal_type: 'lunch',
+              created_at: Date.now() - 3 * 3600 * 1000
+            },
+            {
+              food_name: 'Tri-color Organic Quinoa cooked',
+              calories: 222,
+              protein: 8,
+              carbs: 39,
+              fat: 4,
+              meal_type: 'lunch',
+              created_at: Date.now() - 2.8 * 3600 * 1000
+            },
+            {
+              food_name: 'Greek Strained Yogurt 0% Fat',
+              calories: 150,
+              protein: 18,
+              carbs: 6,
+              fat: 0,
+              meal_type: 'snack',
+              created_at: Date.now() - 1 * 3600 * 1000
+            }
+          ];
+
+          for (const item of sampleItems) {
+            await API.createLog(item);
+          }
+          await refreshData();
+        } catch (e) {
+          // ignore seeding conflicts
+        }
+      };
+      seedDefaults();
+    }
+  }, [user, logs.length, loading, refreshData]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    setLogs([]);
+  };
+
+  const handleSaveLog = async (logData) => {
+    const res = await API.createLog(logData);
+    await refreshData();
+    return res;
+  };
+
+  const handleDeleteLog = async (id) => {
+    try {
+      await API.deleteLog(id);
+      await refreshData();
+    } catch (err) {
+      alert('Failed to delete log: ' + err.message);
+    }
+  };
+
+  const handleQuickAddMeal = (mealSlot, presetItem = null) => {
+    setSelectedMealSlot(mealSlot || 'breakfast');
+    if (presetItem) {
+      handleSaveLog({
+        food_name: presetItem.name,
+        calories: presetItem.calories,
+        carbs: presetItem.carbs,
+        protein: presetItem.protein,
+        fat: presetItem.fat || 0,
+        meal_type: mealSlot,
+        created_at: Date.now()
+      });
+    } else {
+      setCurrentTab('food-search-and-logging');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-primary">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
+          <span className="font-label-lg font-bold">Initializing NutriTrack...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <AuthView 
+        onAuth={(u) => {
+          setUser(u);
+          setGoal(u.daily_calorie_goal || 2000);
+        }} 
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-on-surface flex flex-col antialiased">
+      
+      {/* Fixed Sidebar */}
+      <Sidebar 
+        currentTab={currentTab}
+        setCurrentTab={setCurrentTab}
+        todayCalories={summary.calories}
+        calorieGoal={goal}
+        isOpen={mobileMenuOpen}
+        setIsOpen={setMobileMenuOpen}
+      />
+
+      {/* Main viewport offset for fixed sidebar */}
+      <div className="pl-0 lg:pl-72 flex flex-col min-h-screen">
+        
+        {/* Top Header */}
+        <Header 
+          user={user}
+          onLogout={handleLogout}
+          calorieGoal={goal}
+          todayCalories={summary.calories}
+          notificationMessage={alertMessage}
+          onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          onSearchClick={() => setCurrentTab('food-search-and-logging')}
+        />
+
+        {/* Dynamic Route View */}
+        <main className="w-full pt-16 bg-background flex-1 pb-16">
+          {currentTab === 'dashboard' && (
+            <DashboardView 
+              user={user}
+              summary={summary}
+              weekly={weekly}
+              logs={logs}
+              goal={goal}
+              onNavigate={setCurrentTab}
+              onQuickAddMeal={handleQuickAddMeal}
+              onDeleteLog={handleDeleteLog}
+              onRefresh={refreshData}
+            />
+          )}
+
+          {currentTab === 'food-diary' && (
+            <FoodDiaryView 
+              logs={logs}
+              goal={goal}
+              onQuickAddMeal={handleQuickAddMeal}
+              onDeleteLog={handleDeleteLog}
+            />
+          )}
+
+          {currentTab === 'barcode-scanner' && (
+            <BarcodeScannerView 
+              onSaveLog={handleSaveLog}
+              onNavigate={setCurrentTab}
+            />
+          )}
+
+          {currentTab === 'food-search-and-logging' && (
+            <FoodSearchView 
+              initialMealSlot={selectedMealSlot}
+              onSaveLog={handleSaveLog}
+              onNavigate={setCurrentTab}
+            />
+          )}
+
+          {currentTab === 'nutrition-goals' && (
+            <GoalsAndAnalyticsView 
+              user={user}
+              goal={goal}
+              onUpdateGoal={newGoal => setGoal(newGoal)}
+              summary={summary}
+              weekly={weekly}
+              mode="goals"
+            />
+          )}
+
+          {currentTab === 'reports-and-analytics' && (
+            <GoalsAndAnalyticsView 
+              user={user}
+              goal={goal}
+              summary={summary}
+              weekly={weekly}
+              mode="analytics"
+            />
+          )}
+
+          {currentTab === 'profile-and-settings' && (
+            <SettingsView 
+              user={user}
+              onUpdateUser={u => setUser(u)}
+            />
+          )}
+        </main>
+
+        {/* Footer */}
+        <footer className="w-full py-4 px-space-lg text-center text-outline text-[12px] border-t border-surface-container bg-surface-container-low">
+          NutriTrack Diagnostic Nutrition Platform • Evidence-based clinical wellness tracker • Signed in as {user.email}
+        </footer>
+
+      </div>
+
+    </div>
+  );
 }
